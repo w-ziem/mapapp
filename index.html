@@ -6,7 +6,112 @@
     <title>Mapa skali polskich miast</title>
   </head>
   <body>
-    <main id="app"></main>
+    <main id="app">
+      <section id="loading-state" class="status-card" aria-live="polite">
+        <span class="loader" aria-hidden="true"></span>
+        <h1>Ładowanie atlasu miast</h1>
+        <p>Przygotowujemy lokalne granice PRG w układzie EPSG:2180.</p>
+      </section>
+
+      <section id="error-state" class="status-card error-card" hidden role="alert">
+        <h1>Nie udało się otworzyć atlasu</h1>
+        <p>Sprawdź lokalne pliki danych i odśwież stronę.</p>
+        <button type="button" onclick="location.reload()">Spróbuj ponownie</button>
+      </section>
+
+      <div id="app-shell" hidden>
+        <div
+          id="map"
+          role="application"
+          aria-label="Interaktywna mapa porównania powierzchni polskich miast"
+          data-testid="map"
+        ></div>
+
+        <aside id="city-panel" aria-label="Panel miast">
+          <header class="panel-header">
+            <div>
+              <p class="eyebrow">Atlas porównawczy</p>
+              <h1>Skala polskich miast</h1>
+            </div>
+            <button
+              id="panel-toggle"
+              class="icon-button"
+              type="button"
+              aria-label="Zwiń lub rozwiń panel"
+              title="Zwiń panel"
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+          </header>
+
+          <div class="panel-scroll">
+            <details class="instructions" open>
+              <summary>Jak porównywać?</summary>
+              <p>
+                Przeciągnij kontur miasta, aby utworzyć kopię. Kopie możesz
+                przesuwać niezależnie, obracać suwakiem lub klawiszami
+                <kbd>[</kbd> i <kbd>]</kbd> (z Shift: 15°).
+              </p>
+            </details>
+
+            <section id="selection-controls" class="selection-card" hidden>
+              <div class="selection-heading">
+                <span>Wybrana kopia</span>
+                <strong id="selection-name"></strong>
+              </div>
+              <label for="angle-slider">
+                Kąt obrotu
+                <output id="angle-output" for="angle-slider">0°</output>
+              </label>
+              <input
+                id="angle-slider"
+                type="range"
+                min="-180"
+                max="180"
+                step="1"
+                value="0"
+                aria-label="Kąt obrotu"
+                data-testid="rotation-slider"
+              />
+              <div class="button-row">
+                <button id="center-selection" type="button">Wyśrodkuj</button>
+                <button id="delete-copy" class="danger" type="button">
+                  Usuń kopię
+                </button>
+              </div>
+            </section>
+
+            <div class="search-block">
+              <label for="city-search">Znajdź miasto</label>
+              <input
+                id="city-search"
+                type="search"
+                placeholder="np. Łódź"
+                autocomplete="off"
+              />
+              <div class="result-meta">
+                <span id="results-count">30 z 30 miast</span>
+                <span>Kopie: <strong id="copy-count">0</strong></span>
+              </div>
+            </div>
+
+            <ol id="city-list" class="city-list" aria-label="30 największych miast"></ol>
+
+            <footer>
+              <p>
+                Źródła: GUS, ludność na 31.12.2025; PRG, granice państwa,
+                województw i miast. Dane zapisane lokalnie, EPSG:2180.
+              </p>
+            </footer>
+          </div>
+
+          <button id="reset-map" class="reset-button" type="button" data-testid="reset">
+            Resetuj mapę
+          </button>
+        </aside>
+      </div>
+      <div id="live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    </main>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -12,6 +12,7 @@ import {
   geometryPivot,
   projectGeometry,
   selectRankedCities,
+  simplifyCityGeometry,
 } from "../../scripts/data/geometry.mjs";
 
 const schema = {
@@ -89,6 +90,23 @@ describe("official PRG GML adapter", () => {
     expect(joined.geometry.type).toBe("MultiPolygon");
     expect(joined.geometry.coordinates).toHaveLength(2);
     expect(joined.properties.prgUnitCount).toBe(2);
+  });
+
+  it("simplifies contours deterministically within one percent area", () => {
+    const source = {
+      type: "Polygon",
+      coordinates: [[
+        [0, 0], [20, 0.2], [40, 0], [40, 40], [20, 39.8], [0, 40], [0, 0],
+      ]],
+    };
+    const result = simplifyCityGeometry(source, 4);
+    expect(result.geometry.coordinates[0].length).toBeLessThan(
+      source.coordinates[0].length,
+    );
+    expect(
+      Math.abs(geometryArea(result.geometry) - geometryArea(source)) /
+        geometryArea(source),
+    ).toBeLessThanOrEqual(0.01);
   });
 
   it("rejects unsupported feature schemas and malformed positions", async () => {

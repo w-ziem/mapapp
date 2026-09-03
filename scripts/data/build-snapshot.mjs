@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractPopulationRanking } from "./gus.mjs";
@@ -8,6 +8,8 @@ import {
   geometryPivot,
   projectGeometry,
   selectRankedCities,
+  simplifyCityGeometry,
+  simplifyGeometry,
 } from "./geometry.mjs";
 import { stableStringify } from "./stable-json.mjs";
 import { validateSnapshot } from "./validate.mjs";
@@ -27,11 +29,29 @@ const featureCollection = (features) => ({
   features,
 });
 
-function projectedFeature(feature, properties) {
+async function writeSnapshotFile(path, content) {
+  const temporaryPath = `${path}.tmp`;
+  await writeFile(temporaryPath, content);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rm(path, { force: true });
+      await rename(temporaryPath, path);
+      return;
+    } catch (error) {
+      if (attempt === 4) throw error;
+      await new Promise((resolveDelay) =>
+        setTimeout(resolveDelay, 100 * (attempt + 1)),
+      );
+    }
+  }
+}
+
+function projectedFeature(feature, properties, tolerance) {
+  const projected = projectGeometry(feature.geometry, feature.srsName, "EPSG:2180");
   return {
     type: "Feature",
     properties,
-    geometry: projectGeometry(feature.geometry, feature.srsName, "EPSG:2180"),
+    geometry: simplifyGeometry(projected, tolerance),
   };
 }
 
@@ -55,14 +75,16 @@ export async function buildSnapshot({
   });
   const ranked = selectRankedCities(cityFeatures, ranking).map((feature) => {
     const projected = projectGeometry(feature.geometry, feature.srsName, "EPSG:2180");
+    const simplified = simplifyCityGeometry(projected);
     return {
       type: "Feature",
       properties: {
         ...feature.properties,
         areaM2: Math.round(geometryArea(projected)),
         pivot: geometryPivot(projected).map((value) => Math.round(value * 10) / 10),
+        simplificationToleranceM: simplified.tolerance,
       },
-      geometry: projected,
+      geometry: simplified.geometry,
     };
   });
 
@@ -73,7 +95,7 @@ export async function buildSnapshot({
     projectedFeature(feature, {
       id: feature.properties.JPT_KOD_JE,
       name: feature.properties.JPT_NAZWA_,
-    }),
+    }, 200),
   );
   const poland = parseGmlFeatureCollection(polandXml, {
     ...sourceSchema,
@@ -82,7 +104,7 @@ export async function buildSnapshot({
     projectedFeature(feature, {
       id: feature.properties.JPT_KOD_JE,
       name: feature.properties.JPT_NAZWA_ || "Polska",
-    }),
+    }, 300),
   );
 
   const manifest = {
@@ -107,22 +129,19 @@ export async function buildSnapshot({
   const validation = validateSnapshot(snapshot);
 
   await mkdir(outputDir, { recursive: true });
-  await Promise.all([
-    writeFile(`${outputDir}/manifest.json`, stableStringify(manifest)),
-    writeFile(`${outputDir}/cities.geojson`, stableStringify(snapshot.cities)),
-    writeFile(`${outputDir}/poland.geojson`, stableStringify(snapshot.poland)),
-    writeFile(
-      `${outputDir}/voivodeships.geojson`,
-      stableStringify(snapshot.voivodeships),
-    ),
-    writeFile(
-      `${outputDir}/validation-report.json`,
-      stableStringify({
-        ...validation,
-        populationValidAt: manifest.populationValidAt,
-      }),
-    ),
-  ]);
+  const files = [
+    ["manifest.json", manifest],
+    ["cities.geojson", snapshot.cities],
+    ["poland.geojson", snapshot.poland],
+    ["voivodeships.geojson", snapshot.voivodeships],
+    [
+      "validation-report.json",
+      { ...validation, populationValidAt: manifest.populationValidAt },
+    ],
+  ];
+  for (const [name, value] of files) {
+    await writeSnapshotFile(`${outputDir}/${name}`, stableStringify(value));
+  }
   return { ...snapshot, validation };
 }
 

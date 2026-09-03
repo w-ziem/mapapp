@@ -87,6 +87,109 @@ function geometryMeasurement(geometry) {
 export const geometryArea = (geometry) => geometryMeasurement(geometry).area;
 export const geometryPivot = (geometry) => geometryMeasurement(geometry).centroid;
 
+function squaredSegmentDistance(point, start, end) {
+  let x = start[0];
+  let y = start[1];
+  let dx = end[0] - x;
+  let dy = end[1] - y;
+  if (dx || dy) {
+    const t =
+      ((point[0] - x) * dx + (point[1] - y) * dy) / (dx * dx + dy * dy);
+    if (t > 1) {
+      x = end[0];
+      y = end[1];
+    } else if (t > 0) {
+      x += dx * t;
+      y += dy * t;
+    }
+  }
+  dx = point[0] - x;
+  dy = point[1] - y;
+  return dx * dx + dy * dy;
+}
+
+function simplifyOpenLine(points, squaredTolerance) {
+  if (points.length <= 2) return points;
+  const markers = new Uint8Array(points.length);
+  const stack = [[0, points.length - 1]];
+  markers[0] = 1;
+  markers[points.length - 1] = 1;
+  while (stack.length) {
+    const [first, last] = stack.pop();
+    let maximum = squaredTolerance;
+    let selected = -1;
+    for (let index = first + 1; index < last; index += 1) {
+      const distance = squaredSegmentDistance(
+        points[index],
+        points[first],
+        points[last],
+      );
+      if (distance > maximum) {
+        selected = index;
+        maximum = distance;
+      }
+    }
+    if (selected > -1) {
+      markers[selected] = 1;
+      stack.push([first, selected], [selected, last]);
+    }
+  }
+  return points.filter((_point, index) => markers[index]);
+}
+
+function simplifyRing(ring, tolerance) {
+  if (ring.length <= 5 || tolerance <= 0) return ring.map((point) => [...point]);
+  const open = ring.slice(0, -1);
+  let farthest = 1;
+  let farthestDistance = 0;
+  for (let index = 1; index < open.length; index += 1) {
+    const dx = open[index][0] - open[0][0];
+    const dy = open[index][1] - open[0][1];
+    const distance = dx * dx + dy * dy;
+    if (distance > farthestDistance) {
+      farthest = index;
+      farthestDistance = distance;
+    }
+  }
+  const squaredTolerance = tolerance * tolerance;
+  const firstHalf = simplifyOpenLine(
+    open.slice(0, farthest + 1),
+    squaredTolerance,
+  );
+  const secondHalf = simplifyOpenLine(
+    [...open.slice(farthest), open[0]],
+    squaredTolerance,
+  );
+  const simplified = [
+    ...firstHalf.slice(0, -1),
+    ...secondHalf.slice(0, -1),
+    [...open[0]],
+  ];
+  return simplified.length >= 4 ? simplified : ring.map((point) => [...point]);
+}
+
+export function simplifyGeometry(geometry, tolerance) {
+  const simplifyPolygon = (polygon) =>
+    polygon.map((ring) => simplifyRing(ring, tolerance));
+  return geometry.type === "Polygon"
+    ? { type: "Polygon", coordinates: simplifyPolygon(geometry.coordinates) }
+    : {
+        type: "MultiPolygon",
+        coordinates: geometry.coordinates.map(simplifyPolygon),
+      };
+}
+
+export function simplifyCityGeometry(geometry, initialTolerance = 40) {
+  const sourceArea = geometryArea(geometry);
+  for (let tolerance = initialTolerance; tolerance >= 2.5; tolerance /= 2) {
+    const simplified = simplifyGeometry(geometry, tolerance);
+    const areaDelta =
+      Math.abs(geometryArea(simplified) - sourceArea) / sourceArea;
+    if (areaDelta <= 0.01) return { geometry: simplified, tolerance };
+  }
+  return { geometry, tolerance: 0 };
+}
+
 export function selectRankedCities(features, ranking) {
   const byTeryt = new Map();
   for (const feature of features) {

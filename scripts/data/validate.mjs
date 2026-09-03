@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { geometryArea } from "./geometry.mjs";
 
 function coordinatesFinite(value) {
   if (!Array.isArray(value)) return false;
@@ -15,6 +16,9 @@ function validateFeatureGeometry(feature, label) {
   }
   if (!coordinatesFinite(feature.geometry.coordinates)) {
     throw new Error(`${label}: non-finite or empty coordinates`);
+  }
+  if (!(geometryArea(feature.geometry) > 0)) {
+    throw new Error(`${label}: non-positive geometry area`);
   }
 }
 

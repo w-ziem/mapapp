@@ -16,9 +16,7 @@
     "data:download": "node scripts/data/download.mjs",
     "data:build": "node scripts/data/build-snapshot.mjs",
     "data:validate": "node scripts/data/validate.mjs",
-    "data:repro": "node scripts/data/reproduce.mjs",
-    "test:e2e": "playwright test",
-    "test:a11y": "playwright test e2e/accessibility.spec.js"
+    "data:repro": "node scripts/data/reproduce.mjs"
   },
   "dependencies": {
     "ol": "10.10.0",
