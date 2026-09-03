@@ -4,9 +4,9 @@
 
 **Goal:** Zbudować statyczną, działającą offline aplikację Vite w vanilla JavaScript, która na atlasowej mapie Polski pozwala porównywać w tej samej skali oficjalne granice administracyjne 30 największych miast przez tworzenie, przesuwanie i obracanie niezależnych kopii.
 
-**Architecture:** Pipeline uruchamiany przed buildem pobiera zamrożone źródła PRG, BDOT10k i GUS, przetwarza je deterministycznie do EPSG:2180, waliduje i zapisuje lokalny snapshot GeoJSON z manifestem. Runtime składa się z czystego silnika geometrii i reduktora, repozytorium danych, adapterów OpenLayers oraz renderera dostępnego UI; stan sesji jest jedynym źródłem prawdy, a warstwy mapy są jego projekcją.
+**Architecture:** Samowystarczalny pipeline Node uruchamiany przed buildem pobiera zamrożone źródła PRG, BDOT10k i GUS, parsuje potrzebne struktury GML, reprojektuje je do EPSG:2180, naprawia, upraszcza, waliduje i zapisuje lokalny snapshot GeoJSON z manifestem. Runtime składa się z czystego silnika geometrii i reduktora, repozytorium danych, adapterów OpenLayers oraz renderera dostępnego UI; stan sesji jest jedynym źródłem prawdy, a warstwy mapy są jego projekcją.
 
-**Tech Stack:** Node.js 22.23.2 LTS, npm, Vite 8.2.2, vanilla JavaScript ES modules, OpenLayers 10.10.0, proj4 2.22.0, Vitest 5.0.0, jsdom 30.0.1, Playwright 1.62.1, `@axe-core/playwright` 4.13.0, JSTS 2.12.1, `fast-xml-parser` 5.11.1, ExcelJS 4.4.0, `adm-zip` 0.6.0 i GDAL/OGR 3.13.3.
+**Tech Stack:** Node.js `>=22.18.0 <23` (zweryfikowane lokalnie: 22.18.0), npm 10.9.3, create-vite 9.2.0, Vite 8.2.2, vanilla JavaScript ES modules, OpenLayers 10.10.0, proj4 2.22.0, Vitest 5.0.0, jsdom 28.1.0, Playwright 1.62.1, `@axe-core/playwright` 4.13.0, JSTS 2.12.1, `fast-xml-parser` 5.11.1, ExcelJS 4.4.0 i `adm-zip` 0.6.0.
 
 ## Global Constraints
 
@@ -23,7 +23,8 @@
 - Stan sesji pozostaje wyłącznie w pamięci; kod runtime nie zapisuje kopii, selekcji ani widoku do localStorage, IndexedDB lub serwera.
 - Pierwsza implementacja każdego zachowania powstaje po konkretnym, obserwowalnie czerwonym teście; testy obrazu są wyłącznie uzupełnieniem asercji funkcjonalnych.
 - Komendy są zgodne z PowerShell; każda komenda jest osobnym wierszem, a sekwencje nie używają `&&`.
-- `package-lock.json` jest wersjonowany. Wersje powyżej sprawdzono 2026-09-03 przez rejestr npm; Node.js 22.23.2 i GDAL 3.13.3 sprawdzono w oficjalnych wydaniach.
+- Pipeline danych działa wyłącznie w Node i nie wymaga poleceń, bibliotek ani instalacji systemowych spoza `npm ci`.
+- `package-lock.json` jest wersjonowany. Wersje pakietów sprawdzono 2026-09-03 przez rejestr npm; jsdom 28.1.0 jest najnowszą sprawdzoną wersją zgodną z lokalnym Node 22.18.0.
 - Nie pushuj commitów. Każdy commit w zadaniach jest lokalnym, logicznym punktem kontrolnym.
 
 ---
@@ -53,10 +54,10 @@
 │   └── raw/                            # pobrane paczki; ignorowane przez Git
 ├── scripts/data/
 │   ├── contracts.mjs                   # typy i stałe DataManifest/CityFeature
-│   ├── command.mjs                     # kontrolowane wywołanie GDAL/OGR
 │   ├── download.mjs                    # pobranie źródeł, SHA-256 i sources.lock
 │   ├── gus.mjs                         # odczyt XLSX, normalizacja TERYT i ranking
-│   ├── geometry.mjs                    # make-valid, reprojekcja i adaptacyjne uproszczenie
+│   ├── gml.mjs                         # ścisły parser potrzebnego podzbioru GML i axis order
+│   ├── geometry.mjs                    # reprojekcja, make-valid i adaptacyjne uproszczenie
 │   ├── build-snapshot.mjs              # deterministyczna orkiestracja wszystkich wyników
 │   ├── stable-json.mjs                 # stabilne sortowanie kluczy i zapis JSON
 │   ├── validate.mjs                    # wszystkie reguły sekcji 9 specyfikacji
@@ -90,6 +91,7 @@
 /**
  * @typedef {[number, number]} Coordinate2180
  * @typedef {{type: "Polygon"|"MultiPolygon", coordinates: number[][][]|number[][][][]}} GeoJSONGeometry
+ * @typedef {{type: "LineString", coordinates: number[][]}} GeoJSONLineString
  * @typedef {{overlayId:string, cityId:string, translation:Coordinate2180,
  *   angle:number, pivot:Coordinate2180}} OverlayState
  * @typedef {{cityId:string, name:string, rank:number, population:number,
@@ -124,11 +126,12 @@
 Run:
 
 ```powershell
-npm create vite@8.2.2 .vite-scaffold -- --template vanilla
+npm create vite@9.2.0 .vite-scaffold -- --template vanilla
 Copy-Item .vite-scaffold\index.html .\index.html
+Copy-Item .vite-scaffold\package.json .\package.json
 Remove-Item .vite-scaffold -Recurse -Force
 npm install --save-exact ol@10.10.0 proj4@2.22.0
-npm install --save-dev --save-exact vite@8.2.2 vitest@5.0.0 jsdom@30.0.1
+npm install --save-dev --save-exact vite@8.2.2 vitest@5.0.0 jsdom@28.1.0
 ```
 
 Then create:
@@ -172,7 +175,7 @@ export function registerPolandProjection() {
 }
 ```
 
-Set `"type": "module"`, `"engines": {"node": ">=22.23.2 <23"}` and exact scripts in `package.json`; configure `test.environment = "jsdom"` and `setupFiles = "./vitest.setup.js"` in `vite.config.js`. `src/main.js` initially calls `registerPolandProjection()` and imports `./styles.css`; `index.html` contains `<main id="app"></main>`.
+Set `"type": "module"`, `"engines": {"node": ">=22.18.0 <23", "npm": "10.9.3"}`, `"packageManager": "npm@10.9.3"` and exact scripts in `package.json`; configure `test.environment = "jsdom"` and `setupFiles = "./vitest.setup.js"` in `vite.config.js`. `src/main.js` initially calls `registerPolandProjection()` and imports `./styles.css`; `index.html` contains `<main id="app"></main>`.
 
 - [ ] **Step 4: Uruchom GREEN i statyczny build**
 
@@ -203,8 +206,11 @@ git commit -m "build: scaffold static map application"
 - Create: `data/sources.config.json`
 - Create: `data/sources.lock.json`
 - Create: `data/fixtures/gus-population.zip`
-- Create: `data/fixtures/prg-city-sample.gml`
+- Create: `data/fixtures/prg-city-polygon.gml`
+- Create: `data/fixtures/prg-city-multipolygon.gml`
+- Create: `data/fixtures/epsg4326-axis-yx.gml`
 - Create: `data/fixtures/bdot-vistula-sample.gml`
+- Create: `data/fixtures/unsupported-schema.gml`
 - Create: `scripts/data/contracts.mjs`
 - Create: `scripts/data/stable-json.mjs`
 - Create: `scripts/data/download.mjs`
@@ -267,7 +273,7 @@ Expected: FAIL z brakiem `scripts/data/gus.mjs` i `scripts/data/download.mjs`.
 
 - [ ] **Step 3: Zaimplementuj minimalny, jawny adapter źródeł**
 
-`sources.config.json` definiuje trzy źródła: `gus-population-2025-12-31`, `prg-administrative-boundaries`, `bdot10k-vistula`. Każde ma landing page, instytucję, zbiór, datę obowiązywania, licencję i atrybucję. Źródło PRG ma trzy artefakty WFS dla typów `A04_Granice_miast`, `A03_Granice_wojewodztw` i `A00_Granice_panstwa`; BDOT10k ma artefakt `OT_SWRS_L` filtrowany po `nazwaGeograficzna = "Wisła"`; mapowanie TERYT używa `JPT_KOD_JE`. Dla GUS downloader wybiera link o tekście zawierającym `Tablice w formacie XLSX`; dla WFS zapisuje pełne zapytania `GetFeature` jako GML. `fast-xml-parser` sprawdza `GetCapabilities` i odrzuca brak zadeklarowanego typu przed pobraniem.
+`sources.config.json` definiuje trzy źródła: `gus-population-2025-12-31`, `prg-administrative-boundaries`, `bdot10k-vistula`. Każde ma landing page, instytucję, zbiór, datę obowiązywania, licencję i atrybucję. Źródło PRG ma trzy artefakty WFS dla typów `A04_Granice_miast`, `A03_Granice_wojewodztw` i `A00_Granice_panstwa`; BDOT10k ma artefakt `OT_SWRS_L` filtrowany po `nazwaGeograficzna = "Wisła"`; mapowanie TERYT używa `JPT_KOD_JE`. Każde zapytanie WFS wymusza `srsName=EPSG:4326`, a odpowiadający `SourceSchema` zapisuje `sourceCrs:"EPSG:4326"` i formalny porządek osi WFS 2.0 `axisOrder:"yx"`; parser odrzuca odpowiedź, która deklaruje inny CRS. Dla GUS downloader wybiera link o tekście zawierającym `Tablice w formacie XLSX`; dla WFS zapisuje pełne zapytania `GetFeature` jako GML. `fast-xml-parser` sprawdza `GetCapabilities` i odrzuca brak zadeklarowanego typu przed pobraniem.
 
 ```js
 // scripts/data/gus.mjs
@@ -315,22 +321,23 @@ git add .gitignore package.json package-lock.json data/sources.config.json data/
 git commit -m "feat: lock official city data sources"
 ```
 
-### Task 3: Reproject, repair and simplify geometries
+### Task 3: Parse GML, reproject, repair and simplify geometries
 
 **Files:**
-- Create: `scripts/data/command.mjs`
+- Create: `scripts/data/gml.mjs`
 - Create: `scripts/data/geometry.mjs`
 - Create: `data/labels.config.json`
+- Test: `tests/data/gml.test.js`
 - Test: `tests/data/geometry.test.js`
-- Test: `tests/data/gdal-command.test.js`
 - Modify: `package.json`
 - Modify: `package-lock.json`
 
 **Interfaces:**
-- Consumes: `PopulationRecord[]`, surowe GML, GDAL 3.13.3 i source schema z `sources.config.json`.
-- Produces: `runOgr(args, spawnImpl): Promise<void>`, `repairAndProject(inputPath, layer, outputPath): Promise<void>`, `selectRankedCities(features,ranking): Feature[]`, `simplifyCity(feature, initialTolerance=50): ProcessedCity`, `simplifyContext(feature, tolerance=150): Feature`; `ProcessedCity.properties` ma dokładnie `cityId,name,rank,population,areaM2,pivot`.
+- Consumes: `PopulationRecord[]`, surowe GML PRG/BDOT10k, `SourceSchema = {featureType:string,geometryProperty:string,idProperty:string|null,nameProperty:string|null,sourceCrs:string,axisOrder:"xy"|"yx"}` z `sources.config.json`, `fast-xml-parser` 5.11.1, proj4 2.22.0 i JSTS 2.12.1.
+- Produces: `normalizeSrsName(srsName): "EPSG:2180"|"EPSG:4326"`, `parsePosList(text,{dimension,axisOrder}): number[][]`, `parseGmlGeometry(node,{sourceCrs,axisOrder,path}): GeoJSONGeometry`, `parseGmlFeatureCollection(xml,schema): ParsedFeature[]`, `parseBdotLineStrings(xml,schema): ParsedLineFeature[]`, `projectGeometry(geometry,{sourceCrs,axisOrder,targetCrs}): GeoJSONGeometry|GeoJSONLineString`, `selectRankedCities(features,ranking): Feature[]`, `repairGeometry(geometry): GeoJSONGeometry`, `simplifyCity(feature,initialTolerance=50): ProcessedCity`, `simplifyContext(feature,tolerance=150): Feature`, `new UnsupportedGmlSchemaError(code,path,message)`.
+- `ParsedFeature = {sourceId:string|null,properties:Record<string,string>,geometry:GeoJSONGeometry,srsName:"EPSG:2180"|"EPSG:4326"}`; `ParsedLineFeature` ma ten sam kształt z `geometry:GeoJSONLineString`. `UnsupportedGmlSchemaError` ma `{name:"UnsupportedGmlSchemaError",code:"FEATURE_TYPE"|"GEOMETRY_TYPE"|"SRS_NAME"|"AXIS_ORDER"|"DIMENSION"|"POS_LIST"|"PROPERTY",path:string}`.
 
-- [ ] **Step 1: Napisz czerwone testy adaptacyjnego uproszczenia i komendy GDAL**
+- [ ] **Step 1: Zainstaluj wyłącznie zależność potrzebną przez naprawę i napisz czerwone testy GML**
 
 Run:
 
@@ -339,9 +346,103 @@ npm install --save-dev --save-exact jsts@2.12.1
 ```
 
 ```js
+// tests/data/gml.test.js
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { parseBdotLineStrings, parseGmlFeatureCollection } from "../../scripts/data/gml.mjs";
+import { projectGeometry } from "../../scripts/data/geometry.mjs";
+
+const prgSchema = {
+  featureType: "A04_Granice_miast", geometryProperty: "geom",
+  idProperty: "JPT_KOD_JE", nameProperty: "JPT_NAZWA_",
+  sourceCrs: "EPSG:2180", axisOrder: "xy"
+};
+
+it("parses gml:posList Polygon, properties and srsName", async () => {
+  const xml = await readFile("data/fixtures/prg-city-polygon.gml", "utf8");
+  const [feature] = parseGmlFeatureCollection(xml, prgSchema);
+  expect(feature.properties).toMatchObject({ JPT_KOD_JE: "066301", JPT_NAZWA_: "Lublin" });
+  expect(feature.srsName).toBe("EPSG:2180");
+  expect(feature.geometry).toEqual({
+    type: "Polygon",
+    coordinates: [[[100000, 200000], [100100, 200000], [100100, 200100],
+      [100000, 200100], [100000, 200000]]]
+  });
+});
+
+it("maps GML MultiSurface and MultiPolygon members to GeoJSON MultiPolygon", async () => {
+  const xml = await readFile("data/fixtures/prg-city-multipolygon.gml", "utf8");
+  const [feature] = parseGmlFeatureCollection(xml, prgSchema);
+  expect(feature.geometry.type).toBe("MultiPolygon");
+  expect(feature.geometry.coordinates).toHaveLength(2);
+  expect(feature.geometry.coordinates.every(polygon => polygon[0][0].length === 2)).toBe(true);
+});
+
+it("parses the BDOT10k Wisła Curve/LineStringSegment subset", async () => {
+  const xml = await readFile("data/fixtures/bdot-vistula-sample.gml", "utf8");
+  const [feature] = parseBdotLineStrings(xml, {
+    featureType: "OT_SWRS_L", geometryProperty: "geometria",
+    idProperty: null, nameProperty: "nazwaGeograficzna",
+    sourceCrs: "EPSG:4326", axisOrder: "yx"
+  });
+  expect(feature.properties.nazwaGeograficzna).toBe("Wisła");
+  expect(feature.geometry).toEqual({ type: "LineString",
+    coordinates: [[21.0, 52.0], [21.1, 52.1], [21.2, 52.2]] });
+  expect(feature.srsName).toBe("EPSG:4326");
+});
+
+it("parses WFS latitude-longitude axis order and projects a known point", async () => {
+  const xml = await readFile("data/fixtures/epsg4326-axis-yx.gml", "utf8");
+  const [feature] = parseGmlFeatureCollection(xml, {
+    ...prgSchema, sourceCrs: "EPSG:4326", axisOrder: "yx"
+  });
+  expect(feature.geometry.coordinates[0][0]).toEqual([21.0122, 52.2297]);
+  const projected = projectGeometry(feature.geometry,
+    { sourceCrs: feature.srsName, axisOrder: "xy", targetCrs: "EPSG:2180" });
+  expect(projected.coordinates[0][0][0]).toBeCloseTo(637382.204, 3);
+  expect(projected.coordinates[0][0][1]).toBeCloseTo(486757.209, 3);
+});
+
+it.each([
+  ["unsupported feature", "data/fixtures/unsupported-schema.gml", "FEATURE_TYPE"],
+  ["unknown CRS", gmlWithSrsName("EPSG:999999"), "SRS_NAME"],
+  ["three dimensional positions", gmlWithDimension(3), "DIMENSION"],
+  ["odd coordinate count", gmlWithPosList("1 2 3"), "POS_LIST"]
+])("rejects %s with a typed schema error", async (_name, input, code) => {
+  const xml = input.endsWith?.(".gml") ? await readFile(input, "utf8") : input;
+  try {
+    parseGmlFeatureCollection(xml, prgSchema);
+    throw new Error("Parser zaakceptował nieobsługiwany schemat");
+  } catch (error) {
+    expect(error).toMatchObject({ name: "UnsupportedGmlSchemaError", code });
+  }
+});
+```
+
+- [ ] **Step 2: Napisz czerwone testy joinu, naprawy i uproszczenia**
+
+```js
 // tests/data/geometry.test.js
 import { expect, it } from "vitest";
-import { countParts, relativeAreaDelta, simplifyCity } from "../../scripts/data/geometry.mjs";
+import { countParts, isValid, relativeAreaDelta, repairGeometry,
+  selectRankedCities, simplifyCity, simplifyContext } from "../../scripts/data/geometry.mjs";
+
+it("joins every ranked city to exactly one PRG feature by TERYT, never name", () => {
+  const features = [prgFeature({ teryt: "146501", name: "Warszawa" }),
+    prgFeature({ teryt: "066301", name: "Lublin" })];
+  const ranking = [{ cityId: "066301", name: "Inna nazwa", rank: 1, population: 1 }];
+  expect(selectRankedCities(features, ranking)[0].properties.cityId).toBe("066301");
+  expect(() => selectRankedCities([...features, features[1]], ranking))
+    .toThrow("TERYT 066301 ma 2 geometrie PRG");
+});
+
+it.each([[clockwisePolygon(), "Polygon"], [invalidMultiPolygon(), "MultiPolygon"]])(
+  "repairs ring orientation and topology for %s", (geometry, expectedType) => {
+    const repaired = repairGeometry(geometry);
+    expect(repaired.type).toBe(expectedType);
+    expect(isValid(repaired)).toBe(true);
+    expect(isCounterClockwise(exteriorRing(repaired))).toBe(true);
+  });
 
 it("halves 50 m tolerance until topology, parts and 1% area are preserved", () => {
   const source = cityFixtureWhose50mSimplificationExceedsOnePercent();
@@ -353,45 +454,93 @@ it("halves 50 m tolerance until topology, parts and 1% area are preserved", () =
   expect(result.properties.pivot.every(Number.isFinite)).toBe(true);
 });
 
-it("joins every ranked city to exactly one PRG feature by TERYT, never name", () => {
-  const features = [prgFeature({ teryt: "146501", name: "Warszawa" }),
-    prgFeature({ teryt: "066301", name: "Lublin" })];
-  const ranking = [{ cityId: "066301", name: "Lublin (ranking)", rank: 1, population: 1 }];
-  const selected = selectRankedCities(features, ranking);
-  expect(selected).toHaveLength(1);
-  expect(selected[0].properties.cityId).toBe("066301");
-  expect(() => selectRankedCities([...features, features[1]], ranking))
-    .toThrow("TERYT 066301 ma 2 geometrie PRG");
-});
-
-it("repairs ring orientation before simplification", () => {
-  const result = simplifyCity(cityWithClockwiseExteriorRing(), 50);
-  expect(isCounterClockwise(exteriorRing(result.geometry))).toBe(true);
-  expect(result.isValid).toBe(true);
+it("simplifies context geometry at 150 m and keeps it valid", () => {
+  const result = simplifyContext(contextPolygonFixture(), 150);
+  expect(result.simplificationToleranceM).toBe(150);
+  expect(isValid(result.geometry)).toBe(true);
 });
 ```
+
+- [ ] **Step 3: Uruchom RED**
+
+Run: `npx vitest run tests/data/gml.test.js tests/data/geometry.test.js`
+
+Expected: FAIL z `Cannot find module '../../scripts/data/gml.mjs'`; żaden test nie uruchamia procesu zewnętrznego.
+
+- [ ] **Step 4: Zaimplementuj ścisły parser i czysty pipeline geometrii**
 
 ```js
-// tests/data/gdal-command.test.js
-it("repairs and reprojects with explicit EPSG:2180", async () => {
-  const spawnImpl = vi.fn(() => fakeSuccessfulChild());
-  await repairAndProject("city.gml", "A04_Granice_miast", "city.geojson", spawnImpl);
-  expect(spawnImpl).toHaveBeenCalledWith("ogr2ogr", expect.arrayContaining(["-makevalid", "-t_srs", "EPSG:2180"]), expect.any(Object));
-});
+// scripts/data/gml.mjs
+const SUPPORTED_SRS = new Map([
+  ["EPSG:2180", "EPSG:2180"],
+  ["urn:ogc:def:crs:EPSG::2180", "EPSG:2180"],
+  ["http://www.opengis.net/def/crs/EPSG/0/2180", "EPSG:2180"],
+  ["EPSG:4326", "EPSG:4326"],
+  ["urn:ogc:def:crs:EPSG::4326", "EPSG:4326"],
+  ["http://www.opengis.net/def/crs/EPSG/0/4326", "EPSG:4326"]
+]);
+
+export class UnsupportedGmlSchemaError extends Error {
+  constructor(code, path, message = `Nieobsługiwany GML w ${path}`) {
+    super(message);
+    this.name = "UnsupportedGmlSchemaError";
+    this.code = code;
+    this.path = path;
+  }
+}
+
+export function normalizeSrsName(srsName) {
+  const normalized = SUPPORTED_SRS.get(srsName);
+  if (!normalized) throw new UnsupportedGmlSchemaError("SRS_NAME", "@srsName");
+  return normalized;
+}
+
+export function parsePosList(text, { dimension = 2, axisOrder }) {
+  if (dimension !== 2) throw schemaError("DIMENSION", "gml:posList");
+  if (!["xy", "yx"].includes(axisOrder)) throw schemaError("AXIS_ORDER", "gml:posList");
+  const values = String(text).trim().split(/\s+/).map(Number);
+  if (!values.length || values.length % 2 || values.some(value => !Number.isFinite(value))) {
+    throw schemaError("POS_LIST", "gml:posList");
+  }
+  const pairs = [];
+  for (let index = 0; index < values.length; index += 2) {
+    pairs.push(axisOrder === "xy" ? [values[index], values[index + 1]]
+      : [values[index + 1], values[index]]);
+  }
+  return pairs;
+}
+
+export function parseGmlFeatureCollection(xml, schema) {
+  assertSourceSchema(schema);
+  const tree = new XMLParser({ preserveOrder: true, ignoreAttributes: false,
+    attributeNamePrefix: "@_", removeNSPrefix: false, trimValues: true }).parse(xml);
+  const members = findElements(tree, ["gml:member", "wfs:member"]);
+  return members.map((member, index) => parseFeatureMember(member, schema, index));
+}
 ```
 
-- [ ] **Step 2: Uruchom RED**
-
-Run: `npx vitest run tests/data/geometry.test.js tests/data/gdal-command.test.js`
-
-Expected: FAIL z brakiem `scripts/data/geometry.mjs`.
-
-- [ ] **Step 3: Dodaj minimalną implementację**
+`parseFeatureMember` wymaga dokładnie typu z `schema.featureType`, wszystkich jawnie skonfigurowanych właściwości i jednej geometrii; dodatkowe skalarne metadane źródła ignoruje. `parseGmlGeometry` obsługuje wyłącznie `gml:Polygon`, `gml:MultiSurface`/`gml:surfaceMember` oraz `gml:MultiPolygon`/`gml:polygonMember`; czyta `gml:exterior`, wszystkie `gml:interior`, `gml:LinearRing` i `gml:posList`. Bierze `srsName` z geometrii albo dziedziczy z bounded member, normalizuje trzy formy URI EPSG przez `SUPPORTED_SRS`, wymaga zgodności z `schema.sourceCrs`, respektuje `srsDimension="2"` i zawsze normalizuje osie do `[x,y]` zgodnie z obowiązkowym `schema.axisOrder`. Brak wymaganej właściwości, dodatkowy typ geometrii, nieznany CRS, niespójny namespace geometrii lub niezamknięty pierścień rzuca `UnsupportedGmlSchemaError` z kodem i ścieżką XML.
 
 ```js
 // scripts/data/geometry.mjs
+proj4.defs("EPSG:2180", "+proj=tmerc +lat_0=0 +lon_0=19 +k=0.9993 +x_0=500000 +y_0=-5300000 +ellps=GRS80 +units=m +no_defs");
+
+export function projectGeometry(geometry, {
+  sourceCrs, axisOrder = "xy", targetCrs = "EPSG:2180"
+}) {
+  if (axisOrder !== "xy") throw new TypeError("projectGeometry oczekuje osi znormalizowanych do xy");
+  return mapCoordinates(geometry, coordinate =>
+    proj4(sourceCrs, targetCrs, coordinate));
+}
+
+export function repairGeometry(geometry) {
+  const fixed = GeometryFixer.fix(new GeoJSONReader().read(geometry));
+  if (!fixed.isValid()) throw new Error("JSTS nie naprawił geometrii");
+  return normalizeRingOrientation(new GeoJSONWriter().write(fixed));
+}
+
 export function simplifyCity(feature, initialTolerance = 50) {
-  const repaired = fixGeometry(feature.geometry);
+  const repaired = repairGeometry(feature.geometry);
   const areaM2 = area(repaired);
   const pivot = centroid(repaired);
   const parts = countParts(repaired);
@@ -407,28 +556,26 @@ export function simplifyCity(feature, initialTolerance = 50) {
 }
 ```
 
-Implementacja używa `GeometryFixer`, `TopologyPreservingSimplifier`, `GeoJSONReader` i `GeoJSONWriter` z JSTS. `command.mjs` uruchamia `ogr2ogr -f GeoJSON -makevalid -t_srs EPSG:2180`, zbiera stderr i kończy błędem bez ukrywania kodu procesu. Etykiety w `data/labels.config.json` mają `{id,text,kind,coordinate:[x,y]}` w EPSG:2180 dla Polski, 16 województw i wybranych punktów orientacyjnych.
+Kolejność orkiestracji jest stała: parse GML → normalizacja osi → reprojekcja proj4 do EPSG:2180 → JSTS `GeometryFixer` i orientacja ringów → TERYT join → obliczenie nieuproszczonej powierzchni/pivotu → upraszczanie. Linie `OT_SWRS_L` Wisły są parsowane jako osobny wspierany `LineString` tylko w adapterze kontekstowym `parseBdotLineStrings`; adapter akceptuje `gml:LineString` oraz `gml:Curve/gml:segments/gml:LineStringSegment/gml:posList`, scala segmenty mające wspólny koniec i odrzuca inne segmenty krzywych kodem `GEOMETRY_TYPE`. `GeoJSONGeometry` miast pozostaje ściśle Polygon/MultiPolygon. Etykiety w `data/labels.config.json` mają `{id,text,kind,coordinate:[x,y]}` w EPSG:2180.
 
-- [ ] **Step 4: Uruchom GREEN**
+- [ ] **Step 5: Uruchom GREEN i zweryfikuj na lokalnym Node**
 
-Run: `npx vitest run tests/data/geometry.test.js tests/data/gdal-command.test.js`
+Run: `npx vitest run tests/data/gml.test.js tests/data/geometry.test.js`
 
-Expected: PASS; fixture wybiera 25 m, zachowuje liczbę części i mieści się w 1%.
+Expected: PASS dla `gml:posList`, rozpoznawania `srsName`, osi xy/yx, znanego punktu Warszawy, Polygon, MultiPolygon, TERYT joinu, naprawy orientacji/topologii i adaptacyjnych 50→25 m; przypadki nieobsługiwanego schematu zwracają oczekiwane typed errors.
 
-- [ ] **Step 5: Refactor i verification na realnych narzędziach**
+Run: `node --version`
 
-Run: `ogr2ogr --version`
-
-Expected: `GDAL 3.13.3`.
+Expected: wersja spełnia `>=22.18.0 <23`; na maszynie referencyjnej `v22.18.0`.
 
 Run: `npx vitest run tests/data`
 
-Expected: PASS; niepoprawna geometria fixture jest naprawiona, Polygon i MultiPolygon zachowują typ oraz skończony pivot.
+Expected: PASS bez procesów zewnętrznych; preprocessing korzysta wyłącznie z modułów z `package-lock.json`.
 
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add package.json package-lock.json scripts/data/command.mjs scripts/data/geometry.mjs data/labels.config.json tests/data
+git add package.json package-lock.json scripts/data/gml.mjs scripts/data/geometry.mjs data/labels.config.json tests/data
 git commit -m "feat: preprocess official map geometries"
 ```
 
@@ -503,7 +650,7 @@ export function stableStringify(value) {
 }
 ```
 
-`build-snapshot.mjs` sortuje miasta po `rank`, pozostałe cechy po stabilnym `id`, zaokrągla współrzędne EPSG:2180 do 3 miejsc po przecinku, zapisuje w `cities.geojson` tylko pola runtime `cityId,name,rank,population,areaM2,pivot` i geometrię, oblicza SHA-256 pięciu danych runtime i buduje manifest z instytucją, zbiorem, landing page, efektywnym URL-em, datami, nazwą pliku, SHA-256, licencją, atrybucją, `preprocessorVersion: 1`, listą 30 miast, reprojekcją i tolerancjami. Liczby części, tolerancja wybrana per miasto i różnica powierzchni trafiają do `validation-report.json`, a nie do runtime properties. Manifest nie hashuje samego siebie ani raportu, aby uniknąć cyklu; raport zapisuje osobny `manifestSha256`, a finalny audit liczy go ponownie.
+`build-snapshot.mjs` wywołuje `parseGmlFeatureCollection` dla trzech artefaktów PRG, `parseBdotLineStrings` dla Wisły, `projectGeometry` dla każdej geometrii, a następnie `repairGeometry`, `selectRankedCities`, `simplifyCity` lub `simplifyContext`; nie uruchamia procesu potomnego. Sortuje miasta po `rank`, pozostałe cechy po stabilnym `id`, zaokrągla współrzędne EPSG:2180 do 3 miejsc po przecinku, zapisuje w `cities.geojson` tylko pola runtime `cityId,name,rank,population,areaM2,pivot` i geometrię, oblicza SHA-256 pięciu danych runtime i buduje manifest z instytucją, zbiorem, landing page, efektywnym URL-em, datami, nazwą pliku, SHA-256, licencją, atrybucją, `preprocessorVersion: 1`, listą 30 miast, reprojekcją i tolerancjami. Liczby części, tolerancja wybrana per miasto i różnica powierzchni trafiają do `validation-report.json`, a nie do runtime properties. Manifest nie hashuje samego siebie ani raportu, aby uniknąć cyklu; raport zapisuje osobny `manifestSha256`, a finalny audit liczy go ponownie.
 
 ```js
 // scripts/data/validate.mjs
@@ -931,7 +1078,19 @@ Expected: PASS; 30 oryginałów, niezależne źródła, zgodny pivot/label/handl
 
 - [ ] **Step 5: Refactor i verification**
 
-Dodaj aktualizację cech po MOVE/ROTATE bez przechowywania autorytatywnych transformacji w OpenLayers. Run: `npx vitest run tests/map`
+```js
+it("reprojects MOVE/ROTATE state and removes only derived features on Reset", () => {
+  syncOverlays({ state: movedAndRotatedState(), citiesById, ...sources });
+  expect(sources.overlays.getFeatures()[0].get("translation")).toBeUndefined();
+  expect(sources.overlays.getFeatures()[0].get("angle")).toBeUndefined();
+  syncOverlays({ state: initialState(), citiesById, ...sources });
+  expect(sources.overlays.getFeatures()).toHaveLength(0);
+  expect(sources.handles.getFeatures()).toHaveLength(0);
+  expect(sources.originals.getFeatures()).toHaveLength(30);
+});
+```
+
+Run: `npx vitest run tests/map`
 
 Expected: PASS; RESET usuwa overlay, handle i overlay label jednym syncem, ale nie oryginały.
 
@@ -977,9 +1136,23 @@ it("leaves empty-space dragging to OpenLayers pan and Escape cancels a gesture",
   expect(mapPan).toHaveBeenCalled();
   expect(cancelledDragState()).toEqual(stateBeforeDrag());
 });
-```
 
-Dodaj obrót uchwytem oparty o `atan2`, wiele kolejnych kopii oryginału, stały pivot i touch pointer.
+it("computes handle rotation with atan2 and preserves the fixed pivot", () => {
+  const controller = harness({ hit: rotationHandleHit("overlay-1") });
+  controller.drag([110, 100], [100, 110]);
+  expect(dispatch).toHaveBeenCalledWith({ type: "ROTATE_OVERLAY",
+    overlayId: "overlay-1", angle: Math.PI / 2 });
+  expect(getState().overlaysById["overlay-1"].pivot).toEqual(originalPivot);
+});
+
+it("supports repeated original drags and touch pointers", () => {
+  const controller = harness({ hit: originalHit("066301"),
+    idFactory: sequentialIds("overlay-1", "overlay-2") });
+  controller.touchDrag([100, 100], [107, 100]);
+  controller.touchDrag([100, 100], [108, 100]);
+  expect(createdOverlayIds(dispatch)).toEqual(["overlay-1", "overlay-2"]);
+});
+```
 
 - [ ] **Step 2: Uruchom RED**
 
@@ -1484,7 +1657,7 @@ git commit -m "test: verify offline map journeys"
 it("documents every reproducible command and evidence artifact", async () => {
   const readme = await readFile("README.md", "utf8");
   for (const text of [
-    "Node.js 22.23.2", "GDAL 3.13.3", "npm ci", "npm run data:download",
+    "Node.js >=22.18.0 <23", "npm 10.9.3", "npm ci", "npm run data:download",
     "npm run data:build", "npm run data:validate", "npm run data:repro",
     "npm test", "npm run build", "npm run test:e2e", "npm run test:a11y",
     "PRG", "BDOT10k", "GUS", "EPSG:2180", "Źródła danych"
@@ -1500,7 +1673,7 @@ Expected: FAIL, ponieważ początkowy README nie opisuje komend ani źródeł.
 
 - [ ] **Step 3: Napisz konkretny README**
 
-README zawiera: wymagania Node/GDAL, `npm ci`, development/build/preview, sekwencję odświeżenia i walidacji danych, źródła PRG `A04_Granice_miast`, GUS stan 2025-12-31, BDOT10k Wisła, TERYT, licencje/atrybucje, architekturę, ograniczenia v1, obsługę panelu i skróty, strategię testów oraz lokalizacje każdego końcowego dowodu.
+README zawiera: wymagania Node `>=22.18.0 <23` i npm 10.9.3, informację „brak zależności systemowych — pipeline danych działa po `npm ci`”, development/build/preview, sekwencję odświeżenia i walidacji danych, źródła PRG `A04_Granice_miast`, GUS stan 2025-12-31, BDOT10k Wisła, kontrakt GML/axis order, TERYT, licencje/atrybucje, architekturę, ograniczenia v1, obsługę panelu i skróty, strategię testów oraz lokalizacje każdego końcowego dowodu.
 
 - [ ] **Step 4: Uruchom GREEN**
 
@@ -1512,15 +1685,15 @@ Expected: PASS.
 
 Run: `node --version`
 
-Expected: `v22.23.2`.
+Expected: wersja spełnia `>=22.18.0 <23`; na maszynie referencyjnej `v22.18.0`.
 
-Run: `ogr2ogr --version`
+Run: `npm --version`
 
-Expected: `GDAL 3.13.3`.
+Expected: `10.9.3`.
 
 Run: `npm ci`
 
-Expected: exit 0 z lockfile.
+Expected: exit 0 z lockfile; nie jest wymagana żadna instalacja systemowa.
 
 Run: `npm run data:validate`
 
