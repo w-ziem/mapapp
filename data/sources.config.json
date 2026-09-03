@@ -1,0 +1,68 @@
+{
+  "sources": [
+    {
+      "id": "gus-population-2025-12-31",
+      "kind": "landing-page",
+      "institution": "Główny Urząd Statystyczny",
+      "dataset": "Powierzchnia i ludność w przekroju terytorialnym w 2026 r.",
+      "landingPage": "https://stat.gov.pl/obszary-tematyczne/ludnosc/ludnosc/powierzchnia-i-ludnosc-w-przekroju-terytorialnym-w-2026-r-,7,23.html",
+      "validAt": "2025-12-31",
+      "license": "https://bip.stat.gov.pl/kontakt/ponowne-wykorzystywanie-informacji-sektora-publicznego/",
+      "attribution": "Źródło: Główny Urząd Statystyczny (GUS), dane według stanu na 31.12.2025; informacja przetworzona.",
+      "linkText": "Tablice w formacie XLSX"
+    },
+    {
+      "id": "prg-administrative-boundaries",
+      "kind": "wfs",
+      "institution": "Główny Urząd Geodezji i Kartografii",
+      "dataset": "Państwowy Rejestr Granic - jednostki administracyjne",
+      "landingPage": "https://mapy.geoportal.gov.pl/wss/service/PZGIK/PRG/WFS/AdministrativeBoundaries",
+      "endpoint": "https://mapy.geoportal.gov.pl/wss/service/PZGIK/PRG/WFS/AdministrativeBoundaries",
+      "validAt": "retrievedAt",
+      "license": "https://www.gov.pl/web/gugik/ponowne-wykorzystanie-informacji-sektora-publicznego",
+      "attribution": "Źródło: Główny Urząd Geodezji i Kartografii – GUGiK; informacja przetworzona.",
+      "mapping": {
+        "cityId": "JPT_KOD_JE"
+      },
+      "sourceSchema": {
+        "sourceCrs": "EPSG:4326",
+        "axisOrder": "yx"
+      },
+      "artifacts": [
+        {
+          "typeName": "ms:A04_Granice_miast",
+          "fileName": "prg-A04-Granice-miast.gml"
+        },
+        {
+          "typeName": "ms:A01_Granice_wojewodztw",
+          "fileName": "prg-A01-Granice-wojewodztw.gml"
+        },
+        {
+          "typeName": "ms:A00_Granice_panstwa",
+          "fileName": "prg-A00-Granice-panstwa.gml"
+        }
+      ]
+    },
+    {
+      "id": "bdot10k-vistula",
+      "kind": "direct",
+      "institution": "Główny Urząd Geodezji i Kartografii",
+      "dataset": "Baza Danych Obiektów Topograficznych (BDOT10k), klasa OT_SWRS_L",
+      "landingPage": "https://www.gov.pl/web/gugik/nowy-sposob-udostepniania-danych-bdot10k-w-geoportalu",
+      "validAt": "retrievedAt",
+      "license": "https://www.gov.pl/web/gugik/ponowne-wykorzystanie-informacji-sektora-publicznego",
+      "attribution": "Źródło: Główny Urząd Geodezji i Kartografii – GUGiK; informacja przetworzona.",
+      "selection": {
+        "mode": "local",
+        "property": "nazwaGeograficzna",
+        "equals": "Wisła"
+      },
+      "artifacts": [
+        {
+          "url": "https://opendata.geoportal.gov.pl/bdot10k/schemat2021/GeoParquet/OT_SWRS_L.parquet",
+          "fileName": "bdot10k-OT_SWRS_L.parquet"
+        }
+      ]
+    }
+  ]
+}
