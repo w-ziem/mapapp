@@ -1,0 +1,13 @@
+{
+  "cityCount": 30,
+  "crs": "EPSG:2180",
+  "files": {
+    "cities": "cities.geojson",
+    "poland": "poland.geojson",
+    "validation": "validation-report.json",
+    "voivodeships": "voivodeships.geojson"
+  },
+  "populationValidAt": "2025-12-31",
+  "sourceLockRetrievedAt": "2026-09-03T21:39:38.081Z",
+  "version": 1
+}
