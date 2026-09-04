@@ -47,24 +47,6 @@
       "license": "https://www.gov.pl/web/gugik/ponowne-wykorzystanie-informacji-sektora-publicznego",
       "retrievedAt": "2026-09-03T21:39:38.081Z",
       "validAt": "2026-09-03"
-    },
-    {
-      "artifacts": [
-        {
-          "effectiveUrl": "https://opendata.geoportal.gov.pl/bdot10k/schemat2021/GeoParquet/OT_SWRS_L.parquet",
-          "fileName": "bdot10k-OT_SWRS_L.parquet",
-          "sha256": "307358f831b0b916d78ac45d097fae6846fe47421535e9f92dad729f3b85610c",
-          "sizeBytes": 201237955
-        }
-      ],
-      "attribution": "Źródło: Główny Urząd Geodezji i Kartografii – GUGiK; informacja przetworzona.",
-      "dataset": "Baza Danych Obiektów Topograficznych (BDOT10k), klasa OT_SWRS_L",
-      "id": "bdot10k-vistula",
-      "institution": "Główny Urząd Geodezji i Kartografii",
-      "landingPage": "https://www.gov.pl/web/gugik/nowy-sposob-udostepniania-danych-bdot10k-w-geoportalu",
-      "license": "https://www.gov.pl/web/gugik/ponowne-wykorzystanie-informacji-sektora-publicznego",
-      "retrievedAt": "2026-09-03T21:39:38.081Z",
-      "validAt": "2026-09-03"
     }
   ],
   "version": 1

@@ -15,11 +15,12 @@
 
       <section id="error-state" class="status-card error-card" hidden role="alert">
         <h1>Nie udało się otworzyć atlasu</h1>
-        <p>Sprawdź lokalne pliki danych i odśwież stronę.</p>
-        <button type="button" onclick="location.reload()">Spróbuj ponownie</button>
+        <p>Sprawdź lokalne pliki danych i spróbuj ponownie.</p>
+        <button id="retry-load" type="button">Spróbuj ponownie</button>
       </section>
 
       <div id="app-shell" hidden>
+        <p id="context-warning" class="context-warning" hidden role="status"></p>
         <div
           id="map"
           role="application"
@@ -38,6 +39,8 @@
               class="icon-button"
               type="button"
               aria-label="Zwiń lub rozwiń panel"
+              aria-expanded="true"
+              aria-controls="city-panel"
               title="Zwiń panel"
             >
               <span aria-hidden="true">‹</span>
@@ -93,6 +96,9 @@
                 <span id="results-count">30 z 30 miast</span>
                 <span>Kopie: <strong id="copy-count">0</strong></span>
               </div>
+              <p id="zero-results" class="zero-results" hidden>
+                Nie znaleziono miasta. Zmień wpisaną nazwę.
+              </p>
             </div>
 
             <ol id="city-list" class="city-list" aria-label="30 największych miast"></ol>
@@ -109,6 +115,30 @@
             Resetuj mapę
           </button>
         </aside>
+
+        <button
+          id="sources-toggle"
+          class="sources-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="sources-panel"
+        >
+          Źródła danych
+        </button>
+        <section
+          id="sources-panel"
+          class="sources-panel"
+          aria-labelledby="sources-title"
+          hidden
+        >
+          <header>
+            <h2 id="sources-title">Źródła danych</h2>
+            <button id="sources-close" class="icon-button" type="button" aria-label="Zamknij źródła">
+              ×
+            </button>
+          </header>
+          <div id="sources-list" class="sources-list"></div>
+        </section>
       </div>
       <div id="live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
     </main>

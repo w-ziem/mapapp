@@ -42,27 +42,6 @@
           "fileName": "prg-A00-Granice-panstwa.gml"
         }
       ]
-    },
-    {
-      "id": "bdot10k-vistula",
-      "kind": "direct",
-      "institution": "Główny Urząd Geodezji i Kartografii",
-      "dataset": "Baza Danych Obiektów Topograficznych (BDOT10k), klasa OT_SWRS_L",
-      "landingPage": "https://www.gov.pl/web/gugik/nowy-sposob-udostepniania-danych-bdot10k-w-geoportalu",
-      "validAt": "retrievedAt",
-      "license": "https://www.gov.pl/web/gugik/ponowne-wykorzystanie-informacji-sektora-publicznego",
-      "attribution": "Źródło: Główny Urząd Geodezji i Kartografii – GUGiK; informacja przetworzona.",
-      "selection": {
-        "mode": "local",
-        "property": "nazwaGeograficzna",
-        "equals": "Wisła"
-      },
-      "artifacts": [
-        {
-          "url": "https://opendata.geoportal.gov.pl/bdot10k/schemat2021/GeoParquet/OT_SWRS_L.parquet",
-          "fileName": "bdot10k-OT_SWRS_L.parquet"
-        }
-      ]
     }
   ]
 }

@@ -290,3 +290,26 @@ it("serializes lock data deterministically and parses portable CLI flags", () =>
     "Unknown argument: --unknown",
   );
 });
+
+it("keeps the default download set limited to runtime inputs", async () => {
+  const config = JSON.parse(
+    await readFile("data/sources.config.json", "utf8"),
+  );
+  const lock = JSON.parse(
+    await readFile("data/sources.lock.json", "utf8"),
+  );
+
+  expect(config.sources.map(({ id }) => id)).toEqual([
+    "gus-population-2025-12-31",
+    "prg-administrative-boundaries",
+  ]);
+  expect(lock.sources.map(({ id }) => id)).toEqual([
+    "gus-population-2025-12-31",
+    "prg-administrative-boundaries",
+  ]);
+  expect(
+    lock.sources.flatMap(({ artifacts }) =>
+      artifacts.map(({ fileName }) => fileName),
+    ),
+  ).not.toContain("bdot10k-OT_SWRS_L.parquet");
+});

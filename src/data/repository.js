@@ -12,13 +12,39 @@ async function fetchJson(fetchImpl, url) {
   return response.json();
 }
 
+const emptyFeatureCollection = () => ({
+  type: "FeatureCollection",
+  features: [],
+});
+
+async function fetchContext(fetchImpl, url, label) {
+  try {
+    return {
+      collection: await fetchJson(fetchImpl, url),
+      warning: null,
+    };
+  } catch {
+    return {
+      collection: emptyFeatureCollection(),
+      warning: `Nie udało się wczytać warstwy kontekstowej ${label}. Porównywanie miast nadal działa.`,
+    };
+  }
+}
+
 export async function loadData(fetchImpl = fetch) {
   try {
     const manifest = await fetchJson(fetchImpl, "/data/manifest.json");
-    const [citiesGeoJSON, poland, voivodeships] = await Promise.all([
-      fetchJson(fetchImpl, `/data/${manifest.files.cities}`),
-      fetchJson(fetchImpl, `/data/${manifest.files.poland}`),
-      fetchJson(fetchImpl, `/data/${manifest.files.voivodeships}`),
+    const citiesGeoJSON = await fetchJson(
+      fetchImpl,
+      `/data/${manifest.files.cities}`,
+    );
+    const [polandResult, voivodeshipResult] = await Promise.all([
+      fetchContext(fetchImpl, `/data/${manifest.files.poland}`, "Polski"),
+      fetchContext(
+        fetchImpl,
+        `/data/${manifest.files.voivodeships}`,
+        "województw",
+      ),
     ]);
     const cities = citiesGeoJSON.features ?? [];
     if (
@@ -38,7 +64,14 @@ export async function loadData(fetchImpl = fetch) {
       citiesById: new Map(
         cities.map((city) => [city.properties.cityId, city]),
       ),
-      context: { poland, voivodeships },
+      context: {
+        poland: polandResult.collection,
+        voivodeships: voivodeshipResult.collection,
+      },
+      warnings: [
+        polandResult.warning,
+        voivodeshipResult.warning,
+      ].filter(Boolean),
     };
   } catch (error) {
     if (error instanceof CriticalDataError) throw error;

@@ -7,7 +7,70 @@
     "validation": "validation-report.json",
     "voivodeships": "voivodeships.geojson"
   },
+  "outputs": {
+    "cities": {
+      "sha256": "a45c4c9cf95051dc3c5d223486ec3125d96202265c42ce8c964c94a61ff5e615"
+    },
+    "poland": {
+      "sha256": "f363a68e7655d893005f6b8b5669b461c24bace98588782259ec8053a82c8a1a"
+    },
+    "validation": {
+      "sha256": "cb5b965041d817eba657ea9bdd23a888075e2d233b6474986d90deb4ce59a7a4"
+    },
+    "voivodeships": {
+      "sha256": "967bc676d9c4c751e2392779414b6faacd1c8c6e69d3ebbcf4f5a6791635d9ef"
+    }
+  },
   "populationValidAt": "2025-12-31",
-  "sourceLockRetrievedAt": "2026-09-03T21:39:38.081Z",
+  "sources": [
+    {
+      "artifacts": [
+        {
+          "effectiveUrl": "https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultaktualnosci/5468/7/23/1/powierzchnia_i_ludnosc_w_przekroju_terytorialnym_2026_2.xlsx",
+          "fileName": "powierzchnia_i_ludnosc_w_przekroju_terytorialnym_2026_2.xlsx",
+          "sha256": "23ac0140f7c24a9a3d5c6ee335d88d3c6a133bc02d70d856f4e3c07387a1842e",
+          "sizeBytes": 476466
+        }
+      ],
+      "attribution": "Źródło: Główny Urząd Statystyczny (GUS), dane według stanu na 31.12.2025; informacja przetworzona.",
+      "dataset": "Powierzchnia i ludność w przekroju terytorialnym w 2026 r.",
+      "id": "gus-population-2025-12-31",
+      "institution": "Główny Urząd Statystyczny",
+      "landingPage": "https://stat.gov.pl/obszary-tematyczne/ludnosc/ludnosc/powierzchnia-i-ludnosc-w-przekroju-terytorialnym-w-2026-r-,7,23.html",
+      "license": "https://bip.stat.gov.pl/kontakt/ponowne-wykorzystywanie-informacji-sektora-publicznego/",
+      "retrievedAt": "2026-09-03T21:39:38.081Z",
+      "validAt": "2025-12-31"
+    },
+    {
+      "artifacts": [
+        {
+          "effectiveUrl": "https://mapy.geoportal.gov.pl/wss/service/PZGIK/PRG/WFS/AdministrativeBoundaries?service=WFS&version=2.0.0&request=GetFeature&typeNames=ms%3AA04_Granice_miast&srsName=EPSG%3A4326&outputFormat=application%2Fgml%2Bxml%3B+version%3D3.2",
+          "fileName": "prg-A04-Granice-miast.gml",
+          "sha256": "0080f3751b28f0095e726583a732d2d4f6fe46f9404a4ed74afdd8b49c522571",
+          "sizeBytes": 20530168
+        },
+        {
+          "effectiveUrl": "https://mapy.geoportal.gov.pl/wss/service/PZGIK/PRG/WFS/AdministrativeBoundaries?service=WFS&version=2.0.0&request=GetFeature&typeNames=ms%3AA01_Granice_wojewodztw&srsName=EPSG%3A4326&outputFormat=application%2Fgml%2Bxml%3B+version%3D3.2",
+          "fileName": "prg-A01-Granice-wojewodztw.gml",
+          "sha256": "7671e5eafdbcebac65ab4d93b3f3eb635b935332d298a3718ecceb2c7580d8b5",
+          "sizeBytes": 8547170
+        },
+        {
+          "effectiveUrl": "https://mapy.geoportal.gov.pl/wss/service/PZGIK/PRG/WFS/AdministrativeBoundaries?service=WFS&version=2.0.0&request=GetFeature&typeNames=ms%3AA00_Granice_panstwa&srsName=EPSG%3A4326&outputFormat=application%2Fgml%2Bxml%3B+version%3D3.2",
+          "fileName": "prg-A00-Granice-panstwa.gml",
+          "sha256": "4b46c0fdf38097975863f03e1773d06b4a0a90215cf4bf715c145ffd60ca0574",
+          "sizeBytes": 1462981
+        }
+      ],
+      "attribution": "Źródło: Główny Urząd Geodezji i Kartografii – GUGiK; informacja przetworzona.",
+      "dataset": "Państwowy Rejestr Granic - jednostki administracyjne",
+      "id": "prg-administrative-boundaries",
+      "institution": "Główny Urząd Geodezji i Kartografii",
+      "landingPage": "https://mapy.geoportal.gov.pl/wss/service/PZGIK/PRG/WFS/AdministrativeBoundaries",
+      "license": "https://www.gov.pl/web/gugik/ponowne-wykorzystanie-informacji-sektora-publicznego",
+      "retrievedAt": "2026-09-03T21:39:38.081Z",
+      "validAt": "2026-09-03"
+    }
+  ],
   "version": 1
 }

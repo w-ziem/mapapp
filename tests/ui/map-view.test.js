@@ -8,6 +8,7 @@ const {
   createPolandView,
   fitViewToExtent,
   getMapPadding,
+  getResetExtent,
 } = await import("../../src/app.js");
 
 describe("map viewport", () => {
@@ -34,5 +35,16 @@ describe("map viewport", () => {
 
   it("reserves space for the mobile bottom panel", () => {
     expect(getMapPadding(390)).toEqual([48, 28, 330, 28]);
+  });
+
+  it("falls back to available boundaries when Poland context is missing", () => {
+    expect(getResetExtent).toBeTypeOf("function");
+    expect(
+      getResetExtent(
+        [Infinity, Infinity, -Infinity, -Infinity],
+        [170000, 130000, 860000, 800000],
+        [200000, 160000, 820000, 760000],
+      ),
+    ).toEqual([170000, 130000, 860000, 800000]);
   });
 });

@@ -87,6 +87,161 @@ function geometryMeasurement(geometry) {
 export const geometryArea = (geometry) => geometryMeasurement(geometry).area;
 export const geometryPivot = (geometry) => geometryMeasurement(geometry).centroid;
 
+const pointsEqual = (first, second) =>
+  first[0] === second[0] && first[1] === second[1];
+
+function orientation(first, second, third) {
+  return (
+    (second[0] - first[0]) * (third[1] - first[1]) -
+    (second[1] - first[1]) * (third[0] - first[0])
+  );
+}
+
+function pointOnSegment(point, start, end) {
+  return (
+    orientation(start, end, point) === 0 &&
+    point[0] >= Math.min(start[0], end[0]) &&
+    point[0] <= Math.max(start[0], end[0]) &&
+    point[1] >= Math.min(start[1], end[1]) &&
+    point[1] <= Math.max(start[1], end[1])
+  );
+}
+
+function segmentsIntersect(firstStart, firstEnd, secondStart, secondEnd) {
+  const firstSideStart = orientation(firstStart, firstEnd, secondStart);
+  const firstSideEnd = orientation(firstStart, firstEnd, secondEnd);
+  const secondSideStart = orientation(secondStart, secondEnd, firstStart);
+  const secondSideEnd = orientation(secondStart, secondEnd, firstEnd);
+  if (
+    Math.sign(firstSideStart) !== Math.sign(firstSideEnd) &&
+    Math.sign(secondSideStart) !== Math.sign(secondSideEnd) &&
+    firstSideStart !== 0 &&
+    firstSideEnd !== 0 &&
+    secondSideStart !== 0 &&
+    secondSideEnd !== 0
+  ) {
+    return true;
+  }
+  return (
+    pointOnSegment(secondStart, firstStart, firstEnd) ||
+    pointOnSegment(secondEnd, firstStart, firstEnd) ||
+    pointOnSegment(firstStart, secondStart, secondEnd) ||
+    pointOnSegment(firstEnd, secondStart, secondEnd)
+  );
+}
+
+function ringSelfIntersects(ring) {
+  for (let first = 0; first < ring.length - 1; first += 1) {
+    for (let second = first + 2; second < ring.length - 1; second += 1) {
+      if (first === 0 && second === ring.length - 2) continue;
+      if (
+        segmentsIntersect(
+          ring[first],
+          ring[first + 1],
+          ring[second],
+          ring[second + 1],
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function ringsIntersect(firstRing, secondRing) {
+  for (let first = 0; first < firstRing.length - 1; first += 1) {
+    for (let second = 0; second < secondRing.length - 1; second += 1) {
+      if (
+        segmentsIntersect(
+          firstRing[first],
+          firstRing[first + 1],
+          secondRing[second],
+          secondRing[second + 1],
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function pointInRing(point, ring) {
+  let inside = false;
+  for (
+    let current = 0, previous = ring.length - 2;
+    current < ring.length - 1;
+    previous = current, current += 1
+  ) {
+    const [currentX, currentY] = ring[current];
+    const [previousX, previousY] = ring[previous];
+    if (
+      currentY > point[1] !== previousY > point[1] &&
+      point[0] <
+        ((previousX - currentX) * (point[1] - currentY)) /
+          (previousY - currentY) +
+          currentX
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function validateRing(ring, label) {
+  if (!Array.isArray(ring) || ring.length < 4) {
+    throw new Error(`${label}: ring requires at least four coordinates`);
+  }
+  if (!pointsEqual(ring[0], ring.at(-1))) {
+    throw new Error(`${label}: ring is not closed`);
+  }
+  if (new Set(ring.slice(0, -1).map((point) => point.join(","))).size < 3) {
+    throw new Error(`${label}: ring requires at least three distinct points`);
+  }
+  if (ringSelfIntersects(ring)) {
+    throw new Error(`${label}: ring has a self-intersection`);
+  }
+  if (!(ringMeasurement(ring).area > 0)) {
+    throw new Error(`${label}: ring has zero area`);
+  }
+}
+
+export function validateGeometryTopology(geometry, label = "geometry") {
+  if (!["Polygon", "MultiPolygon"].includes(geometry?.type)) {
+    throw new Error(`${label}: unsupported geometry type`);
+  }
+  const polygons =
+    geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  if (!Array.isArray(polygons) || polygons.length === 0) {
+    throw new Error(`${label}: geometry requires at least one polygon`);
+  }
+  polygons.forEach((polygon, polygonIndex) => {
+    if (!Array.isArray(polygon) || polygon.length === 0) {
+      throw new Error(`${label}: polygon ${polygonIndex + 1} has no rings`);
+    }
+    polygon.forEach((ring, ringIndex) =>
+      validateRing(ring, `${label}, polygon ${polygonIndex + 1}, ring ${ringIndex + 1}`),
+    );
+    for (let ringIndex = 1; ringIndex < polygon.length; ringIndex += 1) {
+      const hole = polygon[ringIndex];
+      if (ringsIntersect(polygon[0], hole) || !pointInRing(hole[0], polygon[0])) {
+        throw new Error(`${label}: hole ${ringIndex} is outside or intersects its shell`);
+      }
+      for (let other = 1; other < ringIndex; other += 1) {
+        if (
+          ringsIntersect(polygon[other], hole) ||
+          pointInRing(hole[0], polygon[other]) ||
+          pointInRing(polygon[other][0], hole)
+        ) {
+          throw new Error(`${label}: holes ${other} and ${ringIndex} overlap`);
+        }
+      }
+    }
+  });
+  return true;
+}
+
 function squaredSegmentDistance(point, start, end) {
   let x = start[0];
   let y = start[1];
@@ -185,9 +340,29 @@ export function simplifyCityGeometry(geometry, initialTolerance = 40) {
     const simplified = simplifyGeometry(geometry, tolerance);
     const areaDelta =
       Math.abs(geometryArea(simplified) - sourceArea) / sourceArea;
-    if (areaDelta <= 0.01) return { geometry: simplified, tolerance };
+    try {
+      validateGeometryTopology(simplified);
+      if (areaDelta <= 0.01) return { geometry: simplified, tolerance };
+    } catch {
+      // Retry with a smaller tolerance to preserve the source topology.
+    }
   }
+  validateGeometryTopology(geometry);
   return { geometry, tolerance: 0 };
+}
+
+export function simplifyTopologyPreserving(geometry, initialTolerance) {
+  for (let tolerance = initialTolerance; tolerance >= 2.5; tolerance /= 2) {
+    const simplified = simplifyGeometry(geometry, tolerance);
+    try {
+      validateGeometryTopology(simplified);
+      return simplified;
+    } catch {
+      // Retry with a smaller tolerance to preserve the source topology.
+    }
+  }
+  validateGeometryTopology(geometry);
+  return geometry;
 }
 
 export function selectRankedCities(features, ranking) {

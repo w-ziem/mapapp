@@ -17,7 +17,7 @@ const feature = (rank) => ({
   },
 });
 
-function fetchFixture(cityCount = 30) {
+function fetchFixture(cityCount = 30, missing = []) {
   const values = {
     "/data/manifest.json": {
       crs: "EPSG:2180",
@@ -39,7 +39,7 @@ function fetchFixture(cityCount = 30) {
     },
   };
   return vi.fn(async (url) => ({
-    ok: Boolean(values[url]),
+    ok: Boolean(values[url]) && !missing.includes(url),
     json: async () => values[url],
   }));
 }
@@ -53,5 +53,20 @@ describe("local data repository", () => {
 
   it("classifies a malformed city snapshot as critical", async () => {
     await expect(loadData(fetchFixture(29))).rejects.toBeInstanceOf(CriticalDataError);
+  });
+
+  it("keeps city comparison available when both context layers are missing", async () => {
+    const data = await loadData(
+      fetchFixture(30, [
+        "/data/poland.geojson",
+        "/data/voivodeships.geojson",
+      ]),
+    );
+
+    expect(data.cities).toHaveLength(30);
+    expect(data.context.poland.features).toEqual([]);
+    expect(data.context.voivodeships.features).toEqual([]);
+    expect(data.warnings).toHaveLength(2);
+    expect(data.warnings.join(" ")).toMatch(/warstw.*kontekst/i);
   });
 });

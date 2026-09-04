@@ -27,6 +27,18 @@ export function getMapPadding(viewportWidth) {
   return viewportWidth < 768 ? [48, 28, 330, 28] : [70, 70, 70, 390];
 }
 
+export function getResetExtent(...extents) {
+  const extent = extents.find(
+    (candidate) =>
+      candidate?.length === 4 &&
+      candidate.every(Number.isFinite) &&
+      candidate[0] < candidate[2] &&
+      candidate[1] < candidate[3],
+  );
+  if (!extent) throw new Error("Brak geometrii potrzebnej do ustawienia widoku");
+  return extent;
+}
+
 export function createPolandView() {
   return new View({
     projection: "EPSG:2180",
@@ -243,7 +255,12 @@ function createScene(target, data, store) {
     sync,
     focusSelection,
     resetView() {
-      fitViewToExtent(map.getView(), contextSource.getExtent(), {
+      const extent = getResetExtent(
+        contextSource.getExtent(),
+        voivodeshipSource.getExtent(),
+        originalSource.getExtent(),
+      );
+      fitViewToExtent(map.getView(), extent, {
         size: map.getSize(),
         viewportWidth: innerWidth,
         reducedMotion: prefersReducedMotion.matches,
@@ -350,6 +367,46 @@ function createPointerInteraction(scene, data, store, announce) {
   return interaction;
 }
 
+export function createSourcesPanel(root, manifest) {
+  const toggle = root.querySelector("#sources-toggle");
+  const panel = root.querySelector("#sources-panel");
+  const close = root.querySelector("#sources-close");
+  const list = root.querySelector("#sources-list");
+  list.replaceChildren();
+  for (const source of manifest.sources ?? []) {
+    const article = document.createElement("article");
+    const heading = document.createElement("h3");
+    const dataset = document.createElement("a");
+    const dates = document.createElement("p");
+    const attribution = document.createElement("p");
+    const license = document.createElement("a");
+    heading.textContent = source.institution;
+    dataset.href = source.landingPage;
+    dataset.textContent = source.dataset;
+    dataset.target = "_blank";
+    dataset.rel = "noreferrer";
+    dates.textContent =
+      `Stan danych: ${source.validAt}. Pobrano: ${source.retrievedAt.slice(0, 10)}.`;
+    attribution.textContent = source.attribution;
+    license.href = source.license;
+    license.textContent = "Licencja i ponowne wykorzystanie";
+    license.target = "_blank";
+    license.rel = "noreferrer";
+    article.append(heading, dataset, dates, attribution, license);
+    list.append(article);
+  }
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    if (open) close.focus();
+    else toggle.focus();
+  };
+  toggle.addEventListener("click", () =>
+    setOpen(toggle.getAttribute("aria-expanded") !== "true"),
+  );
+  close.addEventListener("click", () => setOpen(false));
+}
+
 function createPanel(root, data, store, scene, announce) {
   const list = root.querySelector("#city-list");
   const search = root.querySelector("#city-search");
@@ -396,6 +453,7 @@ function createPanel(root, data, store, scene, announce) {
     }
     root.querySelector("#results-count").textContent =
       `${list.children.length} z 30 miast`;
+    root.querySelector("#zero-results").hidden = list.children.length !== 0;
   }
 
   function render() {
@@ -415,6 +473,10 @@ function createPanel(root, data, store, scene, announce) {
       "panel-collapsed",
       state.desktopPanel === "collapsed",
     );
+    const panelToggle = root.querySelector("#panel-toggle");
+    const panelOpen = state.desktopPanel === "open";
+    panelToggle.setAttribute("aria-expanded", String(panelOpen));
+    panelToggle.title = panelOpen ? "Zwiń panel" : "Rozwiń panel";
   }
 
   search.addEventListener("input", () =>
@@ -457,10 +519,50 @@ function createPanel(root, data, store, scene, announce) {
   render();
 }
 
-export async function startApp({ root = document } = {}) {
+function mountApplication({ root, data, announce }) {
+  const viewportMode = innerWidth < 768 ? "mobile" : "desktop";
+  const store = createStore(
+    sessionReducer,
+    createInitialState({ view: INITIAL_VIEW, viewportMode }),
+  );
+  const scene = createScene(root.querySelector("#map"), data, store);
+  store.subscribe(scene.sync);
+  createPointerInteraction(scene, data, store, announce);
+  createPanel(root, data, store, scene, announce);
+  createSourcesPanel(root, data.manifest);
+  window.addEventListener("keydown", (event) => {
+    if (
+      event.target instanceof HTMLInputElement &&
+      event.target.type !== "range"
+    ) {
+      return;
+    }
+    const delta = getRotationDelta(event);
+    const overlayId = store.getState().selectedOverlayId;
+    if (!delta || !overlayId) return;
+    event.preventDefault();
+    const overlay = store.getState().overlaysById[overlayId];
+    store.dispatch({
+      type: "ROTATE_OVERLAY",
+      overlayId,
+      angle: radians(wrapDegrees(degrees(overlay.angle) + delta)),
+    });
+  });
+  scene.map.updateSize();
+  scene.resetView();
+  return { data, store, scene };
+}
+
+export async function startApp({
+  root = document,
+  loadDataImpl = loadData,
+  mountApp = mountApplication,
+} = {}) {
   const loading = root.querySelector("#loading-state");
   const error = root.querySelector("#error-state");
   const shell = root.querySelector("#app-shell");
+  const contextWarning = root.querySelector("#context-warning");
+  const retry = root.querySelector("#retry-load");
   const live = root.querySelector("#live-region");
   const announce = (message) => {
     live.textContent = "";
@@ -468,44 +570,35 @@ export async function startApp({ root = document } = {}) {
       live.textContent = message;
     });
   };
-  try {
-    const data = await loadData();
-    const viewportMode = innerWidth < 768 ? "mobile" : "desktop";
-    const store = createStore(
-      sessionReducer,
-      createInitialState({ view: INITIAL_VIEW, viewportMode }),
-    );
-    const scene = createScene(root.querySelector("#map"), data, store);
-    store.subscribe(scene.sync);
-    createPointerInteraction(scene, data, store, announce);
-    createPanel(root, data, store, scene, announce);
-    window.addEventListener("keydown", (event) => {
-      if (
-        event.target instanceof HTMLInputElement &&
-        event.target.type !== "range"
-      ) {
-        return;
+
+  async function bootstrap() {
+    loading.hidden = false;
+    error.hidden = true;
+    shell.hidden = true;
+    if (contextWarning) {
+      contextWarning.hidden = true;
+      contextWarning.textContent = "";
+    }
+    try {
+      const data = await loadDataImpl();
+      const application = mountApp({ root, data, announce });
+      if (contextWarning && data.warnings?.length) {
+        contextWarning.textContent = data.warnings.join(" ");
+        contextWarning.hidden = false;
       }
-      const delta = getRotationDelta(event);
-      const overlayId = store.getState().selectedOverlayId;
-      if (!delta || !overlayId) return;
-      event.preventDefault();
-      const overlay = store.getState().overlaysById[overlayId];
-      store.dispatch({
-        type: "ROTATE_OVERLAY",
-        overlayId,
-        angle: radians(wrapDegrees(degrees(overlay.angle) + delta)),
-      });
-    });
-    loading.hidden = true;
-    shell.hidden = false;
-    scene.map.updateSize();
-    scene.resetView();
-    return { data, store, scene };
-  } catch (cause) {
-    loading.hidden = true;
-    error.hidden = false;
-    error.querySelector("p").textContent = cause.message;
-    throw cause;
+      loading.hidden = true;
+      shell.hidden = false;
+      return application;
+    } catch (cause) {
+      loading.hidden = true;
+      error.hidden = false;
+      error.querySelector("p").textContent = cause.message;
+      throw cause;
+    }
   }
+
+  retry?.addEventListener("click", () => {
+    bootstrap().catch(() => {});
+  });
+  return bootstrap();
 }

@@ -36,7 +36,9 @@ Wszystkie potrzebne pliki znajdują się w `public/data`.
 
 Na wąskich ekranach panel działa jako kompaktowy arkusz u dołu mapy. Interfejs
 ma widoczny fokus, komunikaty `aria-live`, duże cele dotykowe i respektuje
-`prefers-reduced-motion`.
+`prefers-reduced-motion`. Przycisk `Źródła danych` jest zawsze dostępny, także
+po zwinięciu panelu miast, i pokazuje instytucje, zestawy, licencje oraz daty
+pozyskania i obowiązywania danych zapisane w manifeście.
 
 ## Dane i odtwarzalność
 
@@ -62,14 +64,21 @@ npm run data:repro
 ```
 
 `data:download` bez `--refresh` odtwarza pliki zgodne z lockiem; świadomą zmianę
-źródeł wykonuje się przez `npm run data:download -- --refresh`.
+źródeł wykonuje się przez `npm run data:download -- --refresh`. Domyślnie
+pobierane są tylko cztery artefakty używane przez aplikację: skoroszyt GUS oraz
+trzy warstwy PRG. Nieużywany plik BDOT10k o wielkości około 201 MB nie należy do
+konfiguracji ani locka.
 
 Snapshot zawiera dokładnie 30 unikalnych miast, Polskę i 16 województw.
 Współrzędne są reprojektowane z formalnego porządku osi WFS `yx` do EPSG:2180.
 Kontury miast są deterministycznie upraszczane z tolerancją do 40 m, przy
-zachowaniu pola w granicy 1%; pole i punkt obrotu liczone są wcześniej z pełnej
-geometrii. Transformacje ekranu zawsze powstają z niezmiennej geometrii
-snapshotu, więc przesuwanie i obrót nie kumulują błędu.
+zachowaniu pola w granicy 1% i poprawnej topologii pierścieni; pole i punkt
+obrotu liczone są wcześniej z pełnej geometrii. Build przed przetwarzaniem
+sprawdza SHA-256 każdego surowego artefaktu względem locka. Manifest publikuje
+pełną proweniencję źródeł oraz SHA-256 plików wynikowych, a walidator sprawdza
+zamknięcie i minimalną liczbę punktów pierścieni, samoprzecięcia, pola i sumy
+wyników. Transformacje ekranu zawsze powstają z niezmiennej geometrii snapshotu,
+więc przesuwanie i obrót nie kumulują błędu.
 
 ## Testy
 
@@ -87,14 +96,15 @@ odwrotność transformacji, niemutowalny reducer/store, wiele kopii, Reset,
 normalizację polskich znaków, skróty klawiaturowe i krytyczne błędy loadera.
 
 Playwright uruchamia produkcyjny build w Chromium i sprawdza widok całej Polski,
-listę 30 miast, wyszukiwanie, przeciągnięcie Lublina do ruchomej kopii, obrót
-suwakiem i klawiaturą, Reset, brak żądań do obcych domen oraz układ mobilny.
-Zrzuty z ostatniego przebiegu trafiają do `test-results/evidence/`.
+listę 30 miast, wyszukiwanie i pusty wynik, nieruchomy oryginał Lublina, dwie
+niezależne kopie, przesuwanie istniejącej kopii, obrót suwakiem i klawiaturą,
+wyśrodkowanie, usunięcie, pełny Reset, źródła danych dostępne przy zwiniętym
+panelu, brak żądań do obcych domen oraz układ mobilny z jednocześnie dostępną
+mapą i filtrem. Zrzuty z ostatniego przebiegu trafiają do
+`test-results/evidence/`.
 
 ## Obecne ograniczenia
 
-- Wisła z BDOT10k jest opcjonalna i pominięta: oficjalny artefakt klasy
-  `OT_SWRS_L` to około 201 MB w GeoParquet i wymaga dodatkowego filtra/toolingu.
 - Zagregowane dzielnice Warszawy, Krakowa i Łodzi pozostają częściami
   MultiPolygon; obliczenia powierzchni są poprawne, ale przy dużym zbliżeniu
   mogą być widoczne wspólne granice części.
