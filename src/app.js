@@ -14,7 +14,7 @@ import { createInitialState, sessionReducer } from "./domain/state.js";
 import { createStore } from "./domain/store.js";
 import { getRotationDelta, normalizeSearch } from "./ui/controls.js";
 
-const INITIAL_VIEW = { center: [500000, 455000], zoom: 6.35 };
+const INITIAL_VIEW = { center: [500000, 455000], zoom: 1 };
 const geoJSON = new GeoJSON();
 const prefersReducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -22,6 +22,34 @@ const population = new Intl.NumberFormat("pl-PL");
 const degrees = (radians) => Math.round((radians * 180) / Math.PI);
 const radians = (value) => (Number(value) * Math.PI) / 180;
 const wrapDegrees = (value) => ((value + 180) % 360 + 360) % 360 - 180;
+
+export function getMapPadding(viewportWidth) {
+  return viewportWidth < 768 ? [48, 28, 330, 28] : [70, 70, 70, 390];
+}
+
+export function createPolandView() {
+  return new View({
+    projection: "EPSG:2180",
+    center: INITIAL_VIEW.center,
+    zoom: INITIAL_VIEW.zoom,
+    minZoom: 0,
+    maxZoom: 13,
+  });
+}
+
+export function fitViewToExtent(
+  view,
+  extent,
+  { size, viewportWidth, reducedMotion, maxZoom },
+) {
+  const options = {
+    size,
+    padding: getMapPadding(viewportWidth),
+    duration: reducedMotion ? 0 : 350,
+  };
+  if (maxZoom !== undefined) options.maxZoom = maxZoom;
+  view.fit(extent, options);
+}
 
 function styleSet() {
   const original = new Style({
@@ -142,13 +170,7 @@ function createScene(target, data, store) {
     target,
     layers: Object.values(layers),
     controls: defaultControls({ attribution: false, rotate: false }),
-    view: new View({
-      projection: "EPSG:2180",
-      center: INITIAL_VIEW.center,
-      zoom: INITIAL_VIEW.zoom,
-      minZoom: 5.4,
-      maxZoom: 13,
-    }),
+    view: createPolandView(),
   });
 
   function sync() {
@@ -189,12 +211,11 @@ function createScene(target, data, store) {
 
   function fitFeature(feature) {
     if (!feature) return;
-    map.getView().fit(feature.getGeometry().getExtent(), {
+    fitViewToExtent(map.getView(), feature.getGeometry().getExtent(), {
       size: map.getSize(),
-      padding:
-        innerWidth < 768 ? [48, 28, 330, 28] : [70, 70, 70, 390],
+      viewportWidth: innerWidth,
+      reducedMotion: prefersReducedMotion.matches,
       maxZoom: 10.3,
-      duration: prefersReducedMotion.matches ? 0 : 350,
     });
   }
 
@@ -222,8 +243,11 @@ function createScene(target, data, store) {
     sync,
     focusSelection,
     resetView() {
-      map.getView().setCenter([...INITIAL_VIEW.center]);
-      map.getView().setZoom(INITIAL_VIEW.zoom);
+      fitViewToExtent(map.getView(), contextSource.getExtent(), {
+        size: map.getSize(),
+        viewportWidth: innerWidth,
+        reducedMotion: prefersReducedMotion.matches,
+      });
     },
   };
 }
@@ -476,6 +500,7 @@ export async function startApp({ root = document } = {}) {
     loading.hidden = true;
     shell.hidden = false;
     scene.map.updateSize();
+    scene.resetView();
     return { data, store, scene };
   } catch (cause) {
     loading.hidden = true;

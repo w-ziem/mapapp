@@ -16,13 +16,16 @@
     "data:download": "node scripts/data/download.mjs",
     "data:build": "node scripts/data/build-snapshot.mjs",
     "data:validate": "node scripts/data/validate.mjs",
-    "data:repro": "node scripts/data/reproduce.mjs"
+    "data:repro": "node scripts/data/reproduce.mjs",
+    "pretest:e2e": "npm run build",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "ol": "10.10.0",
     "proj4": "2.22.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "adm-zip": "0.6.0",
     "exceljs": "4.4.0",
     "fast-xml-parser": "5.11.1",

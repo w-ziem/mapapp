@@ -78,6 +78,7 @@ npm test
 npm run data:validate
 npm run data:repro
 npm run build
+npm run test:e2e
 ```
 
 Vitest obejmuje downloader i ranking GUS, parser Polygon/MultiPolygon, osie i
@@ -85,9 +86,10 @@ reprojekcję GML, walidację snapshotu, zachowanie pola przy obrocie i przesuni�
 odwrotność transformacji, niemutowalny reducer/store, wiele kopii, Reset,
 normalizację polskich znaków, skróty klawiaturowe i krytyczne błędy loadera.
 
-Playwright nie został dodany w przyspieszonym zakresie. Stabilne nazwy
-dostępności i atrybuty `data-testid="map"`, `rotation-slider` oraz `reset`
-umożliwiają późniejsze testy przeglądarkowe.
+Playwright uruchamia produkcyjny build w Chromium i sprawdza widok całej Polski,
+listę 30 miast, wyszukiwanie, przeciągnięcie Lublina do ruchomej kopii, obrót
+suwakiem i klawiaturą, Reset, brak żądań do obcych domen oraz układ mobilny.
+Zrzuty z ostatniego przebiegu trafiają do `test-results/evidence/`.
 
 ## Obecne ograniczenia
 
